@@ -1,223 +1,217 @@
-# ISLE: Site Template <!-- omit in toc -->
+# SITE_NAME <!-- omit in toc -->
 
 [![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](./LICENSE)
 
 - [Introduction](#introduction)
-  - [Forking Warning](#forking-warning)
-  - [Assumptions](#assumptions)
 - [Requirements](#requirements)
-- [Automatic Setup](#automatic-setup)
-- [Manual Setup](#manual-setup)
-  - [Create a new repository](#create-a-new-repository)
-  - [Setup Islandora Starter Site](#setup-islandora-starter-site)
-- [Customizations](#customizations)
-  - [Set environment properties](#set-environment-properties)
-  - [Replace README.md with Template](#replace-readmemd-with-template)
+- [Docker Compose](#docker-compose)
+  - [Override](#override)
+  - [Building](#building)
+  - [Pulling](#pulling)
+  - [Running / Stoping / Destroying](#running--stoping--destroying)
+    - [Development Profile](#development-profile)
+    - [Production Profile](#production-profile)
+  - [Pushing](#pushing)
+    - [Local Registry](#local-registry)
+    - [Remote Registry](#remote-registry)
+- [Development](#development)
+  - [UID](#uid)
+  - [Development Certificates](#development-certificates)
+    - [Create Certificate Authority](#create-certificate-authority)
+      - [Windows](#windows)
+      - [OSX and Linux](#osx-and-linux)
+    - [Copy Certificate Authority files](#copy-certificate-authority-files)
+      - [Windows](#windows-1)
+      - [OSX and Linux](#osx-and-linux-1)
+    - [Create Development Certificates](#create-development-certificates)
+      - [Windows](#windows-2)
+      - [OSX and Linux](#osx-and-linux-2)
+  - [Upgrading Isle Docker Images](#upgrading-isle-docker-images)
+  - [Drupal Development](#drupal-development)
+- [Production](#production)
+  - [Generate secrets](#generate-secrets)
+  - [Production Domain](#production-domain)
+  - [Automated Certificate Generation](#automated-certificate-generation)
+  - [Setup as a systemd Service](#setup-as-a-systemd-service)
+  - [SELinux Considerations](#selinux-considerations)
 
 # Introduction
 
-Template for building and customizing your institution's Islandora installation,
-for use as both a development and production environment for your institution.
-
-After confirming that [assumptions](#assumptions) match your use case, and you
-have the appropriate [requirements](#requirements), follow the
-[instructions](#instructions) to set up your institution's Islandora
-installation from this template.
-
-> N.B. This is the **not** the only way to manage your Islandora installation,
-> please also see [isle-dc] and [islandora-playbook], and consult with the wider
-> community on the [Islandora Slack].
-
-## Forking Warning
-
-This is not intended to be an upstream fork that your institution will be
-pulling changes from. Instead this repository acts as a template, where the
-intention is to make a new Git repository from it. By copying the contents of
-this repository into your institution's Git repository. For which your
-institution will then be responsible for.
-
-This is for a few reasons. Namely, we can't guarantee forward compatibility with
-the changes made by your institution to a fork of this Git repository. Your
-institution must be responsible for it's own configuration, as changes to
-configuration **cannot** easily be shared across Drupal sites.
-
-## Assumptions
-
-This template assumes you'll be using `docker compose` for running your site in
-production on a **single server**. If that is not your intention you may want to ask
-in the community slack about existing examples for your chosen infrastructure.
-
-This template assumes a single site installation and isn't configured for a
-[Drupal multisite](https://www.drupal.org/docs/multisite-drupal). It is possible
-to add the functionality for that later, but it is left to the implementer to do
-those additional changes.
-
-While Islandora can be setup to use a wide variety of databases, tools and
-configurations this template is limited to the following.
-
- - `blazegraph` is included by default.
- - `crayfish` services are included by default.
- - `fcrepo` is included by default.
- - `fits` is included by default.
- - `mariadb` is used for the backend database (rather than `postgresql`).
- - `matomo` is included by default.
- - `solr` is included by default.
- - etc.
-
-> N.B. Although alternate components and configurations are supported by
-> Islandora, for simplicities sake the most common use-case is shown. For
-> example `mariadb` is used rather than `postgresql` is provided by this
-> repository.
-
-See the [customizations](#customizations) steps afterwards about removing unwanted features.
+This is the development and production infrastructure for INSTITUTION's SITE_NAME.
 
 # Requirements
 
 - [Docker 20.10+](https://docs.docker.com/get-docker/)
 - [Docker Compose](https://docs.docker.com/compose/install/linux/) **Already included in OSX with Docker**
-- [mkcert 1.4+](https://github.com/FiloSottile/mkcert)
+- [mkcert 1.4+](https://github.com/FiloSottile/mkcert) **Local Development only**
 
-# Automatic Setup
+# Docker Compose
 
-After installing the [requirements](#requirements), run the following command
-for an automated setup, it is roughly equivalent to the
-[Manual Setup](#manual-setup).
+There are a number of `docker-compose.yml` files provided by this repository:
 
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Islandora-Devops/isle-site-template/main/setup.sh)"
-```
+| File                                                       | Description                                                                                      |
+| :--------------------------------------------------------- | :----------------------------------------------------------------------------------------------- |
+| [docker-compose.yml](docker-compose.yml)                   | Defines all development & production services.                                                   |
+| [docker-compose.darwin.yml](docker-compose.darwin.yml)     | Platform specific customizations to allow access to host `SSH_AGENT`. For development use only.  |
+| [docker-compose.linux.yml](docker-compose.linux.yml)       | Platform specific customizations to allow access to host `SSH_AGENT`. For development use only.  |
+| [docker-compose.override.yml](docker-compose.override.yml) | Customizations for local development environment.                                                |
+| [docker-compose.registry.yml](docker-compose.registry.yml) | Used for creating a local registry for testing multi-arch builds, etc. Can typically be ignored. |
 
-You should now have a folder with the `SITE_NAME` you provided to the above
-script with the basics completed for you.
+## Override
 
-On your platform of choice [GitHub], [GitLab], etc. Create a new Git repository
-for your new site.
+This repository ignores `docker-compose.override.yml` which will be included in
+any `docker compose` commands you invoke by default.
 
-In the following sections the [GitHub], [GitLab], etc; organization will be
-referred to as `INSTITUTION`, and the Git repository will be referred to as
-`SITE_NAME`.
+Two platform dependent templates that allow for access to the hosts `SSH agent`
+are provided for `development` environments.
 
-Push the automatically generate repository to your remote (*For example with [GitHub]*):
+Simply copy the appropriate `docker-compose.PLATFORM.yml` file into
+`docker-compose.override.yml`, on your development machine.
 
-```bash
-cd SITE-NAME
-git remote add origin git@github.com:INSTITUTION/SITE-NAME.git
-git push
-```
+Any additional changes that are for your local / development environment can
+then be added to `docker-compose.override.yml`.
 
-You can now continue on to [customizations](#customizations).
+## Building
 
-# Manual Setup
-
-## Create a new repository
-
-On your platform of choice [GitHub], [GitLab], etc. Create a new Git repository
-for your new site.
-
-In the following sections the [GitHub], [GitLab], etc; organization will be
-referred to as `INSTITUTION`, and the Git repository will be referred to as
-`SITE_NAME`.
-
-1. Clone a copy locally (*For example with [GitHub]*):
+You can build your locally using `docker compose`
 
 ```bash
-git clone git@github.com:INSTITUTION/SITE-NAME.git
-cd SITE-NAME
+docker compose --profile dev build
 ```
 
-At this point it should be an empty folder.
+## Pulling
 
-2. Unpack this repository into that empty folder (using the latest release, or
-   the `main` branch).
+The `docker compose` file provided require that you first pull the islandora
+images with the following command:
 
 ```bash
-wget -c https://github.com/Islandora-Devops/isle-site-template/archive/refs/heads/main.tar.gz -O - | tar -xz --strip-components=1
+docker compose --profile dev --profile prod pull --ignore-buildable --ignore-pull-failures
 ```
 
-3. Remove .github folder and setup.sh
+## Running / Stoping / Destroying
+
+You must specify a profile either `dev` or `prod` to use `docker compose` files
+provided by this repository.
+
+### Development Profile
+
+Use the `dev` profile when bring up your local/development environment:
 
 ```bash
-rm -fr .github setup.sh
+docker compose --profile dev up -d
 ```
 
-4. Create the first commit:
+You must wait several minutes for the islandora site to install. When completed
+you can see the following in the output from the `drupal-dev` container, with
+the following command:
 
 ```bash
-git add .
-git commit -am "First commit, added isle-site-template."
+docker compose logs -f drupal-dev
 ```
 
-5. Push your changes to your institution's repository:
+```txt
+#####################
+# Install Completed #
+#####################
+```
+
+For all accounts in the development profile the username and password is set to
+the following:
+
+| Credentials | Value    |
+| :---------- | :------- |
+| Username    | admin    |
+| Password    | password |
+
+If you have the domain in your `.env` set to `islandora.dev` you can access all
+the services at the following URLs.
+
+| Service    | URL                                       |
+| :--------- | :---------------------------------------- |
+| Drupal     | https://islandora.dev                     |
+| IDE        | https://ide.islandora.dev                 |
+| ActiveMQ   | https://activemq.islandora.dev            |
+| Blazegraph | https://blazegraph.islandora.dev/bigdata/ |
+| Fedora     | https://fcrepo.islandora.dev/fcrepo/rest/ |
+| Matomo     | https://islandora.dev/matomo/index.php    |
+| Solr       | https://solr.islandora.dev                |
+| Traefik    | https://traefik.islandora.dev             |
+
+To stop your local/development environment:
 
 ```bash
-git push
+docker compose --profile dev down
 ```
 
-## Setup Islandora Starter Site
-
-Just as this repository is not intended to be an upstream fork, neither is the
-[islandora-starter-site]. It is a starting point from which your institution
-will customize and manage your Islandora installation.
-
-1. Unpack the [islandora-starter-site] using the latest release, or the `main`
-   branch (from the root of your repository).
+To **destroy all data** from your local/development environment:
 
 ```bash
-wget -c https://github.com/Islandora-Devops/islandora-starter-site/archive/refs/heads/main.tar.gz \
-     -O - | tar --strip-components=1 -C drupal/rootfs/var/www/drupal -xz
+docker compose --profile dev down -v
 ```
 
-This will place the contents in [drupal/rootfs/var/www/drupal].
+### Production Profile
 
-2. Remove unneeded files (from the root of your repository):
+Use the `prod` profile when bring up your production environment:
 
 ```bash
-rm -fr \
-  drupal/rootfs/var/www/drupal/.github
+docker compose --profile prod up -d
 ```
 
-3. Revert the content of
-   [drupal/rootfs/var/www/drupal/assets/patches/default_settings.txt] to what
-   was originally there.
+To stop your production environment:
 
 ```bash
-git checkout drupal/rootfs/var/www/drupal/assets/patches/default_settings.txt
+docker compose --profile prod down
 ```
 
-3. Create the second commit:
+> N.B. You shouldn't really ever run the following on your production server.
+> This is just when testing the differences for production environment on your
+> local machine.
+
+To **destroy all data** from your production environment:
 
 ```bash
-git add .
-git commit -am "Second commit, added islandora-starter-site."
+docker compose --profile prod down -v
 ```
 
-4. Push your changes to your institution's repository:
+## Pushing
+
+Pushing requires setting up either a [Local Registry](#local-registry), or a
+[Remote Registry](#remote-registry). Though you may want to use both concurrently.
+
+Additionally the command to build & push changes if you need multi-platform
+support, i.e. if you need to be able to run on ARM (Apple M1, etc) as well as
+x86 (Intel / AMD) CPUs.
+
+### Local Registry
+
+To test multi-platform builds locally requires setting up a local registry.
+
+This can be done with the assistance of [isle-builder] repository.
+
+> N.B. Alternatively you can push directly to a remote registry like
+> [DockerHub], though that can be slow as it needs to upload your image over the
+> network.
+
+Now you can perform the build locally by pushing to the local registry:
 
 ```bash
-git push
+REPOSITORY=islandora.io docker buildx bake --builder isle-builder --push
 ```
 
-Continue on to [Customizations](#customizations).
+> N.B. If you **do not** override `REPOSITORY` environment variable, the value
+> provided by [.env] is used, which will typically be the remote registry you
+> intended to use.
 
-# Customizations
+### Remote Registry
 
-The previous sections will have set you up with a Git repository to start from,
-but more customization is likely needed.
+First you must choose a Docker image registry provider such as [DockerHub].
 
-Read through each following sections and follow the steps if you deem them
-applicable to your institutions situation.
+Assuming your are logged into your remote repository, i.e. you've done
+`docker login` with the appropriate arguments and credentials for your chosen
+remote Docker image repository.
 
-## Set environment properties
-
-Edit [.env] and replace the following line, with a name derived from your site
-name:
-
-```bash
-COMPOSE_PROJECT_NAME=isle-site-template
-```
-
-After setting up a remote Docker image registry like [DockerHub]. Set the
-following line to your use your image registry:
+You must then replace the following line in [.env] to match the repository you
+have created with your chosen registry provider:
 
 ```bash
 # The Docker image repository, to push/pull custom images from.
@@ -225,14 +219,232 @@ following line to your use your image registry:
 REPOSITORY=islandora.io
 ```
 
-After purchasing a domain name for your production site, set the following line
-to your new domain:
+If you do not need to build multi-platform images, you can then push to the
+remote repository using `docker compose`:
+
+```bash
+docker compose --profile dev push drupal-dev
+```
+
+If you do need produce multi-platform images, you'll need to setup a builder
+which is covered under the [Local Registry](#local-registry) section.
+
+```bash
+docker buildx bake --builder isle-builder --push
+```
+
+> N.B. In this example `REPOSITORY` **is not** overridden, so the value provided
+> by [.env] is used.
+
+# Development
+
+## UID
+
+Use the following `bash` snippet to generate the `./certs/UID` file.
+
+```bash
+printf '%s' "$(id -u)" > ./certs/UID
+```
+
+This is used on container startup to make sure bind mounted files are owned by
+the same user as the host machine.
+
+> N.B. Alternatively this file is generated when you run [generate-certs.sh]
+
+## Development Certificates
+
+If you have [mkcert] properly installed you can simply run [generate-certs.sh]
+to generate development certificates, otherwise follow the manual steps outlined
+below.
+
+Before we can start a local instance of the site we must generate certificates
+for local development. This varies a bit across platforms, please refer to the
+[mkcert] documentation to ensure your setup is correct for your host platform,
+and you have the appropriate dependencies installed.
+
+> These certificates are only used for local development production is setup to use
+> certificates automatically generated by [lets-encrypt].
+
+### Create Certificate Authority
+
+> N.B. This only has to be done **once** per host, and is only required for
+> **local development**. On a production server you should be using actual
+> certificates which will be documented in a later section.
+
+#### Windows
+
+You must do this using `cmd.exe` as an **Administrator** as `WSL` does **not**
+have access to Windows trust store and is not able to install certificates.
+
+1. Generate and install `rootCA` files:
+
+```bat
+mkcert.exe -install
+```
+
+#### OSX and Linux
+
+1. Generate and install `rootCA` files:
+
+```bash
+mkcert -install
+```
+
+### Copy Certificate Authority files
+
+The previous step generate two rootCA files which you must copy into this repositories
+[certs](./certs/) folder.
+
+#### Windows
+
+Using `cmd.exe` although no longer as an administrator.
+
+1. Determine the location  of the `rootCA` files:
+
+```bat
+mkcert.exe -CAROOT
+```
+
+2. Copy the certificates into the [certs](./certs) folder (from the root of your repository):
+
+```
+set CAROOT="VALUE FROM STEP #1"
+copy %CAROOT%\rootCA-key.pem certs
+copy %CAROOT%\rootCA.pem certs
+```
+
+> N.B. Firefox does not work with these certificates on Windows. So you must use
+> either Chrome or Edge on Windows.
+
+#### OSX and Linux
+
+```bash
+cp $(mkcert -CAROOT)/* certs/
+```
+
+### Create Development Certificates
+
+#### Windows
+
+Using `cmd.exe` although no longer as an administrator.
+
+1. Create site certificates (from the root of your repository):
+
+```bat
+mkcert.exe -cert-file certs\cert.pem -key-file certs\privkey.pem "*.islandora.dev" "islandora.dev" "*.islandora.io" "islandora.io" "*.islandora.info" "islandora.info" "localhost" "127.0.0.1" "::1"
+```
+
+#### OSX and Linux
+
+1. Create site certificates (from the root of your repository):
+
+```bash
+mkcert \
+  -cert-file certs/cert.pem \
+  -key-file certs/privkey.pem \
+  "*.islandora.dev" \
+  "islandora.dev" \
+  "*.islandora.io" \
+  "islandora.io" \
+  "*.islandora.info" \
+  "islandora.info" \
+  "localhost" \
+  "127.0.0.1" \
+  "::1"
+```
+
+## Upgrading Isle Docker Images
+
+Edit [.env] and replace the following line, with your new targeted version:
+
+```bash
+# The version of the isle-buildkit images to use.
+ISLANDORA_TAG=x.x.x
+```
+
+Then you can [pull](#pulling) the latest images as described previously.
+
+Then read the **release notes** for the versions between your current version
+and your target version, as manual steps beyond what is listed here will likely
+be required.
+
+Of course **make backups** before deploying to production and test thoroughly.
+
+## Drupal Development
+
+For local development via the [development profile], an [IDE] is provided which
+can also support the use of [PHPStorm].
+
+There are a number of bind mounted directories so changes made in the following
+files & folders will persist in this Git repository.
+
+- /var/www/drupal/assets
+- /var/www/drupal/composer.json
+- /var/www/drupal/composer.lock
+- /var/www/drupal/config
+- /var/www/drupal/web/modules/custom
+- /var/www/drupal/web/themes/custom
+
+Other changes such as to the `vendor` folder or installed modules are **not**
+persisted, to disk. This is by design as these changes should be managed via
+`composer` and baked into the Drupal Docker image.
+
+Changes made to `composer.json` and `composer.lock` will require you to rebuild
+the Drupal Docker image, see [building](#building) for how.
+
+> N.B. None of the above directories are bind mounted in production as
+> development in a production environment is not supported. The production site
+> should be fairly locked down, and only permit changes to content and not
+> configuration.
+
+# Production
+
+Running in production makes use of the [production profile], which requires
+either manually provided secrets, or generating secrets. As well as a properly
+configured DNS records as is described in the following sections.
+
+## Generate secrets
+
+To be able to run the production profile of the [docker-compose.yml] file the
+referenced secrets and JWT public/private key pair must be created. There is
+inline instructions for generating each secret in [docker-compose.yml].
+
+Alternatively you can use the [generate-secrets.sh] `bash` script to generate
+them all quickly.
+
+> N.B. The script will not overwrite existing secret files so it's safe to run
+> repeatedly.
+
+## Production Domain
+
+The [.env] has a variable `DOMAIN` which should be set to the production sites
+domain.
 
 ```bash
 # The domain at which your production site is hosted.
-DOMAIN=islandora.dev
+DOMAIN=xxx.xxx
 ```
-Lastly update the default email to that of your sites administrator:
+
+## Automated Certificate Generation
+
+Traefik has support for [acme] (_Automatic Certificate Management Environment_).
+This is what is used to generate certificates in a production environment.
+
+This is configured to use a HTTP based challenge and requires that the following
+`A Records` be set in your production sites `DNS Records`. Where `DOMAIN` is
+replaced with the production sites domain.
+
+- ${DOMAIN}
+- activemq.${DOMAIN}
+- blazegraph.${DOMAIN}
+- fcrepo.${DOMAIN}
+- solr.${DOMAIN}
+
+Each of the above values should be set to the IP address of your production
+server.
+
+Additionally be sure to update the default email to that of your sites
+administrator:
 
 ```bash
 # The email to use for admin users and Lets Encrypt.
@@ -241,47 +453,50 @@ EMAIL=postmaster@example.com
 
 > N.B. This is required to property generate certificates automatically!
 
-## Replace README.md with Template
+## Setup as a systemd Service
 
-Since this `README.md` is meant as a guide for creating your institution's
-Islandora installation, it is not useful after that point. Instead a template
-[README.template.md](./README.template.md) is provided from which you can then
-customize. This template includes instructions on how to build and start up your
-containers, as well as how to customize your Islandora installation. Please read
-it after completing the steps in this `README.md`.
+Most Linux distributions use `systemd` for process management, on your production
+server you can use the following unit file with `systemd`.
 
-1. Replace this README.md with the template:
+> N.B. Replace the `User`, `Group`, and `WorkingDirectory` lines as appropriate.
 
-```bash
-mv README.template.md README.md
+```ini
+[Unit]
+Description= Islandora
+PartOf=docker.service
+After=docker.service
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/SITE_NAME
+ExecStart=/usr/bin/docker compose --profile prod up
+ExecStop=/usr/bin/docker compose --profile prod down
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-2. Customize the README.md:
+## SELinux Considerations
 
-Replace instances of `INSTITUTION` and `SITE-NAME` with appropriate values and
-add any additional information you see fit.
-
-3. Commit your changes:
-
-```bash
-git commit -am "Replaced README.md from provided template."
-```
-
-4. Push your changes to your institution's repository:
+If you using a system with SELinux enabled, you will need to set the appropriate
+labels on the generated secrets files for Docker to be allowed to mount them
+into containers.
 
 ```bash
-git push
+sudo chcon -R -t container_file_t secrets/*
 ```
 
 [.env]: .env
+[acme]: https://doc.traefik.io/traefik/https/acme/
+[development profile]: #development-profile
+[docker-compose.yml]: ./docker-compose.yml
 [DockerHub]: https://hub.docker.com/
-[drupal/rootfs/var/www/drupal]: drupal/rootfs/var/www/drupal
-[drupal/rootfs/var/www/drupal/assets/patches/default_settings.txt]: drupal/rootfs/var/www/drupal/assets/patches/default_settings.txt
-[GitHub]: https://github.com/
-[GitLab]: https://gitlab.com/
-[Islandora Slack]: https://islandora.slack.com/
-[islandora-playbook]: https://github.com/Islandora-Devops/islandora-playbook
-[islandora-starter-site]: https://github.com/Islandora-Devops/islandora-starter-site
-[isle-dc]: https://github.com/Islandora-Devops/isle-dc
+[generate-certs.sh]: ./generate-certs.sh
+[generate-secrets.sh]: ./generate-secrets.sh
+[IDE]: https://github.com/Islandora-Devops/isle-buildkit#ide
+[isle-builder]: https://github.com/Islandora-Devops/isle-builder
 [lets-encrypt]: https://letsencrypt.org/
 [mkcert]: https://github.com/FiloSottile/mkcert
+[PHPStorm]: https://github.com/Islandora-Devops/isle-buildkit#phpstorm
+[production profile]: #production-profile
